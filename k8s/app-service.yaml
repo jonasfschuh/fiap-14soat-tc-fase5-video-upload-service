@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: video-upload-service
+  namespace: raceforce-dev
+  labels:
+    app: video-upload-api
+    environment: development
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/port: "8083"
+    prometheus.io/scheme: "http"
+spec:
+  type: NodePort
+  ports:
+    - port: 8083
+      targetPort: 8083
+      nodePort: 30085
+      protocol: TCP
+      name: http
+  selector:
+    app: video-upload-api
+

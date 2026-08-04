@@ -1,0 +1,311 @@
+name: Deploy Video Upload MS no EKS
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  APP_NAME: video-upload-api
+  DOCKERHUB_IMAGE: video-upload-api
+  K8S_DEPLOYMENT: video-upload-api
+  K8S_SERVICE: video-upload-service
+  K8S_NAMESPACE: raceforce-dev
+
+jobs:
+  build-and-test:
+    name: 1. Build e Teste
+    runs-on: ubuntu-latest
+    outputs:
+      tests_total: ${{ steps.collect-quality-metrics.outputs.tests_total }}
+      tests_failures: ${{ steps.collect-quality-metrics.outputs.tests_failures }}
+      tests_skipped: ${{ steps.collect-quality-metrics.outputs.tests_skipped }}
+      tests_success: ${{ steps.collect-quality-metrics.outputs.tests_success }}
+      coverage_pct: ${{ steps.collect-quality-metrics.outputs.coverage_pct }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Garantir permissao do Maven Wrapper
+        run: chmod +x ./mvnw
+
+      - name: Buildar e testar aplicacao
+        run: ./mvnw -B -ntp clean verify
+        env:
+          SPRING_PROFILES_ACTIVE: test
+
+      - name: Coletar metricas de testes e cobertura
+        id: collect-quality-metrics
+        run: |
+          python3 - <<'PY'
+          import glob, os, xml.etree.ElementTree as ET
+
+          test_files = glob.glob('**/target/surefire-reports/*.xml', recursive=True)
+          total = failures = skipped = 0
+          for f in test_files:
+              try:
+                  root = ET.parse(f).getroot()
+                  items = [root] if root.tag == 'testsuite' else root.findall('testsuite')
+                  for s in items:
+                      total += int(s.attrib.get('tests',0) or 0)
+                      failures += int(s.attrib.get('failures',0) or 0) + int(s.attrib.get('errors',0) or 0)
+                      skipped += int(s.attrib.get('skipped',0) or 0)
+              except: pass
+          for f in glob.glob('**/target/cucumber-reports/cucumber.xml', recursive=True):
+              try:
+                  root = ET.parse(f).getroot()
+                  total += int(root.attrib.get('tests',0) or 0)
+                  failures += int(root.attrib.get('failures',0) or 0)
+              except: pass
+          success = max(total - failures - skipped, 0)
+          covered = missed = 0
+          for f in glob.glob('**/target/site/jacoco/jacoco.xml', recursive=True):
+              try:
+                  root = ET.parse(f).getroot()
+                  for c in root.findall(".//counter[@type='LINE']"):
+                      covered += int(c.attrib.get('covered',0) or 0)
+                      missed += int(c.attrib.get('missed',0) or 0)
+              except: pass
+          coverage = (covered/(covered+missed)*100) if covered+missed>0 else 0.0
+          with open(os.environ['GITHUB_OUTPUT'],'a') as fh:
+              fh.write(f"tests_total={total}\ntests_failures={failures}\ntests_skipped={skipped}\ntests_success={success}\ncoverage_pct={coverage:.2f}\n")
+          print(f"Tests: total={total}, success={success}, failures={failures}, skipped={skipped}, coverage={coverage:.2f}%")
+          PY
+
+      - name: Upload artefatos de cobertura
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            **/target/site/jacoco/
+            **/target/cucumber-reports/
+
+  publish-docker-image:
+    name: 2. Publicar Imagem Docker
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    outputs:
+      version_tag: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+      - name: Gerar tag de versão
+        id: version
+        run: echo "VERSION=v$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Buildar e enviar imagem Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_IMAGE }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_IMAGE }}:${{ steps.version.outputs.VERSION }}
+
+  deploy-to-kubernetes:
+    name: 3. Deploy no Kubernetes (EKS)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-raceforce-video-upload
+      cancel-in-progress: false
+    needs: [build-and-test, publish-docker-image]
+    if: ${{ needs.publish-docker-image.result == 'success' }}
+    outputs:
+      nlb_dns: ${{ steps.fetch-infra.outputs.nlb_dns }}
+      api_gw_url: ${{ steps.fetch-infra.outputs.api_gw_url }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Instalar dependências
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Buscar dados de Infra e PostgreSQL via tfstate
+        id: fetch-infra
+        run: |
+          set -euo pipefail
+          TF_STATE_BUCKET="${{ vars.TF_STATE_BUCKET || 'fiap-14soat-fase4-jonasfschuh' }}"
+          INFRA_STATE=$(aws s3 cp "s3://${TF_STATE_BUCKET}/infra/terraform.tfstate" -)
+
+          EKS_CLUSTER_NAME=$(echo "$INFRA_STATE" | jq -r '.outputs.eks_cluster_name.value // empty')
+          DB_HOST_VALUE=$(echo "$INFRA_STATE" | jq -r '.outputs.rds_host.value // empty')
+          DB_PORT_VALUE=$(echo "$INFRA_STATE" | jq -r '.outputs.rds_port.value // "5432"')
+          DB_NAME_VALUE="video_upload_db"
+          DB_USERNAME_VALUE=$(echo "$INFRA_STATE" | jq -r '.outputs.rds_master_username.value // "postgres"')
+          NLB_DNS=$(echo "$INFRA_STATE" | jq -r '.outputs.nlb_dns_name.value // empty')
+          if [ -z "$EKS_CLUSTER_NAME" ] || [ "$EKS_CLUSTER_NAME" = "null" ]; then
+            echo "Erro: eks_cluster_name nao encontrado no state da infra."
+            exit 1
+          fi
+          if [ -z "$DB_HOST_VALUE" ] || [ "$DB_HOST_VALUE" = "null" ]; then
+            echo "Erro: rds_host nao encontrado. Execute deploy_infra.yaml primeiro."
+            exit 1
+          fi
+
+          echo "EKS_CLUSTER_NAME=${EKS_CLUSTER_NAME}" >> "$GITHUB_ENV"
+          echo "DB_HOST_VALUE=${DB_HOST_VALUE}" >> "$GITHUB_ENV"
+          echo "DB_PORT_VALUE=${DB_PORT_VALUE}" >> "$GITHUB_ENV"
+          echo "DB_NAME_VALUE=${DB_NAME_VALUE}" >> "$GITHUB_ENV"
+          echo "DB_USERNAME_VALUE=${DB_USERNAME_VALUE}" >> "$GITHUB_ENV"
+          echo "NLB_DNS=${NLB_DNS}" >> "$GITHUB_ENV"
+          echo "nlb_dns=${NLB_DNS}" >> "$GITHUB_OUTPUT"
+          # Ler URLs das filas SQS do tfstate
+          SQS_URL_COMMANDS_VIDEO_UPLOAD=$(echo "$INFRA_STATE" | jq -r '.outputs.saga_queue_urls.value["so-commands-video-upload"] // empty')
+          SQS_URL_SO_REPLIES=$(echo "$INFRA_STATE" | jq -r '.outputs.saga_queue_urls.value["so-replies"] // empty')
+          echo "SQS_URL_COMMANDS_VIDEO_UPLOAD=${SQS_URL_COMMANDS_VIDEO_UPLOAD}" >> "$GITHUB_ENV"
+          echo "SQS_URL_SO_REPLIES=${SQS_URL_SO_REPLIES}" >> "$GITHUB_ENV"
+          # Ler API Gateway URL do tfstate do auth-lambda
+          LAMBDA_STATE=$(aws s3 cp "s3://${TF_STATE_BUCKET}/lambda-auth/terraform.tfstate" - 2>/dev/null || echo '{}')
+          API_GW_URL=$(echo "$LAMBDA_STATE" | jq -r '.outputs.api_gateway_url.value // empty')
+          echo "API_GW_URL=${API_GW_URL}" >> "$GITHUB_ENV"
+          echo "api_gw_url=${API_GW_URL}" >> "$GITHUB_OUTPUT"
+      - name: Garantir acesso EKS para o role atual
+        run: |
+          CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          if [[ "$CALLER_ARN" == *:assumed-role/* ]]; then
+            ROLE_NAME="${CALLER_ARN#*:assumed-role/}"; ROLE_NAME="${ROLE_NAME%%/*}"
+            PRINCIPAL_ARN="arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
+          else
+            PRINCIPAL_ARN="$CALLER_ARN"
+          fi
+          aws eks create-access-entry --cluster-name "${EKS_CLUSTER_NAME}" --region "${{ env.AWS_REGION }}" --principal-arn "${PRINCIPAL_ARN}" --type STANDARD >/dev/null 2>&1 || true
+          aws eks associate-access-policy --cluster-name "${EKS_CLUSTER_NAME}" --region "${{ env.AWS_REGION }}" --principal-arn "${PRINCIPAL_ARN}" --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy --access-scope type=cluster >/dev/null 2>&1 || true
+      - name: Configurar acesso ao cluster EKS
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name "${EKS_CLUSTER_NAME}"
+          kubectl get nodes
+      - name: Garantir namespace da aplicacao
+        run: kubectl get namespace ${{ env.K8S_NAMESPACE }} >/dev/null 2>&1 || kubectl create namespace ${{ env.K8S_NAMESPACE }}
+      - name: Atualizar secrets do Kubernetes
+        run: |
+          JDBC_URL="jdbc:postgresql://$DB_HOST_VALUE:$DB_PORT_VALUE/$DB_NAME_VALUE?sslmode=require"
+          kubectl create secret generic app-secrets \
+            --namespace ${{ env.K8S_NAMESPACE }} \
+            --from-literal=SPRING_DATASOURCE_URL="$JDBC_URL" \
+            --from-literal=SPRING_DATASOURCE_USERNAME="$DB_USERNAME_VALUE" \
+            --from-literal=SPRING_DATASOURCE_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="${{ secrets.NEW_RELIC_KEY }}" \
+            --from-literal=NEW_RELIC_APP_NAME="video-upload-ms-aws" \
+            --from-literal=AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            --from-literal=AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            --from-literal=AWS_SESSION_TOKEN="${{ secrets.AWS_SESSION_TOKEN }}" \
+            --from-literal=AWS_REGION="us-east-1" \
+            --from-literal=AUTH_LAMBDA_URL="${API_GW_URL}" \
+            --from-literal=SQS_URL_COMMANDS_VIDEO_UPLOAD="${SQS_URL_COMMANDS_VIDEO_UPLOAD}" \
+            --from-literal=SQS_URL_SO_REPLIES="${SQS_URL_SO_REPLIES}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Criar secret Docker Hub no EKS
+        run: |
+          kubectl create secret docker-registry dockerhub-secret \
+            --namespace ${{ env.K8S_NAMESPACE }} \
+            --docker-server=https://index.docker.io/v1/ \
+            --docker-username="${{ secrets.DOCKERHUB_USERNAME }}" \
+            --docker-password="${{ secrets.DOCKERHUB_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Aplicar ConfigMap
+        run: kubectl apply -f k8s/configmap.yaml
+      - name: Atualizar tag da imagem no manifesto k8s
+        run: |
+          sed -i "s|image:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_IMAGE }}:${{ needs.publish-docker-image.outputs.version_tag }}|g" k8s/app-deployment.yaml
+      - name: Aplicar manifestos da API
+        run: |
+          kubectl apply -f k8s/app-deployment.yaml
+          if ! kubectl apply -f k8s/app-service.yaml; then
+            kubectl delete service ${{ env.K8S_SERVICE }} --namespace ${{ env.K8S_NAMESPACE }} --ignore-not-found=true
+            kubectl apply -f k8s/app-service.yaml
+          fi
+          if kubectl get apiservice v1beta1.metrics.k8s.io >/dev/null 2>&1; then
+            kubectl apply -f k8s/app-hpa.yaml
+          fi
+      - name: Garantir 1 replica antes do rollout
+        run: kubectl scale deployment/${{ env.K8S_DEPLOYMENT }} --replicas=1 --namespace ${{ env.K8S_NAMESPACE }} || true
+
+      - name: Verificar o status do deploy
+        run: kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} --namespace ${{ env.K8S_NAMESPACE }} --timeout=600s
+      - name: Diagnostico em caso de falha
+        if: failure()
+        run: |
+          kubectl get all --namespace ${{ env.K8S_NAMESPACE }} || true
+          kubectl describe pods --namespace ${{ env.K8S_NAMESPACE }} || true
+          for pod in $(kubectl get pods --namespace ${{ env.K8S_NAMESPACE }} -l app=${{ env.APP_NAME }} -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            echo "===== $pod ====="; kubectl logs "$pod" --namespace ${{ env.K8S_NAMESPACE }} --tail=200 || true
+          done
+
+  deployment-summary:
+    name: 4. Sumario Final
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [build-and-test, publish-docker-image, deploy-to-kubernetes]
+    steps:
+      - name: Publicar resumo no workflow
+        env:
+          BUILD_RESULT: ${{ needs.build-and-test.result }}
+          PUBLISH_RESULT: ${{ needs.publish-docker-image.result }}
+          DEPLOY_RESULT: ${{ needs.deploy-to-kubernetes.result }}
+          TESTS_TOTAL: ${{ needs.build-and-test.outputs.tests_total }}
+          TESTS_SUCCESS: ${{ needs.build-and-test.outputs.tests_success }}
+          TESTS_FAILURES: ${{ needs.build-and-test.outputs.tests_failures }}
+          TESTS_SKIPPED: ${{ needs.build-and-test.outputs.tests_skipped }}
+          COVERAGE_PCT: ${{ needs.build-and-test.outputs.coverage_pct }}
+          IMAGE_TAG: ${{ needs.publish-docker-image.outputs.version_tag }}
+          NLB_DNS: ${{ needs.deploy-to-kubernetes.outputs.nlb_dns }}
+          API_GW_URL: ${{ needs.deploy-to-kubernetes.outputs.api_gw_url }}
+        run: |
+          {
+            echo "## Resumo do Deploy - Video Upload MS"
+            echo ""
+            echo "| Etapa | Resultado |"
+            echo "|---|---|"
+            echo "| Build e Teste | ${BUILD_RESULT} |"
+            echo "| Publicacao Docker | ${PUBLISH_RESULT} |"
+            echo "| Deploy EKS | ${DEPLOY_RESULT} |"
+            echo ""
+            echo "## Testes e Cobertura"
+            echo ""
+            echo "- Testes totais: ${TESTS_TOTAL:-n/a}"
+            echo "- Testes com sucesso: ${TESTS_SUCCESS:-n/a}"
+            echo "- Falhas: ${TESTS_FAILURES:-n/a}"
+            echo "- Ignorados: ${TESTS_SKIPPED:-n/a}"
+            echo "- Cobertura (JaCoCo LINE): ${COVERAGE_PCT:-n/a}%"
+            echo "- Tag da imagem publicada: ${IMAGE_TAG:-n/a}"
+            echo ""
+            echo "## Acesso a API"
+            echo ""
+            echo "### Swagger UI — Acesso Publico (via API Gateway, sem login)"
+            echo ""
+            echo "- **Swagger UI:** \`${API_GW_URL:-<API_GATEWAY_URL>}/video-upload/swagger-ui.html\`"
+            echo "- **OpenAPI JSON:** \`${API_GW_URL:-<API_GATEWAY_URL>}/video-upload/v3/api-docs\`"
+            echo ""
+            echo "> No Swagger, expanda a secao **Authentication** e execute POST /auth/login para obter o JWT."
+            echo ""
+            echo "### Endpoints Protegidos (requerem JWT)"
+            echo ""
+            echo "- API Base: \`${API_GW_URL:-<API_GATEWAY_URL>}/video-upload/api/...\`"
+            echo ""
+            echo "### Swagger UI (acesso local via port-forward)"
+            echo "\`\`\`bash"
+            echo "kubectl port-forward service/video-upload-service 8083:8082 -n raceforce-dev"
+            echo "# Acesse: http://localhost:8082/swagger-ui.html"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+

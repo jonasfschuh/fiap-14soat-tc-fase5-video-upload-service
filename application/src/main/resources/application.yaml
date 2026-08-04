@@ -1,0 +1,55 @@
+﻿server:
+  port: 8082
+
+spring:
+  application:
+    name: ms-video-upload
+  datasource:
+    url: jdbc:postgresql://localhost:5435/video_upload_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+# ─── AWS / SQS — SAGA compensation commands ──────────────────────────────────
+# Disabled by default. Enable via aws.sqs.enabled=true when running with LocalStack.
+aws:
+  region: us-east-1
+  access-key-id: test
+  secret-access-key: test
+  sqs:
+    enabled: true
+    endpoint: http://localhost:4566
+    queue:
+      so-commands-video-upload: http://localhost:4566/000000000000/so-commands-video-upload
+      so-replies: http://localhost:4566/000000000000/so-replies
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true

@@ -1,0 +1,233 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: video-upload-api
+  namespace: raceforce-dev
+  labels:
+    app: video-upload-api
+    environment: development
+    managed-by: kubectl
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: video-upload-api
+  template:
+    metadata:
+      labels:
+        app: video-upload-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8083"
+        prometheus.io/scheme: "http"
+    spec:
+      containers:
+        - name: video-upload-api
+          image: video-upload-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8083
+              name: http
+              protocol: TCP
+          env:
+            - name: SERVER_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SERVER_PORT
+            - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_JPA_HIBERNATE_DDL_AUTO
+            - name: SPRING_JPA_SHOW_SQL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_JPA_SHOW_SQL
+            - name: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT
+            - name: SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL
+            - name: SPRING_FLYWAY_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_FLYWAY_ENABLED
+            - name: SPRING_FLYWAY_LOCATIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_FLYWAY_LOCATIONS
+            - name: SPRING_FLYWAY_BASELINE_ON_MIGRATE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_FLYWAY_BASELINE_ON_MIGRATE
+            - name: SPRING_FLYWAY_VALIDATE_ON_MIGRATE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_FLYWAY_VALIDATE_ON_MIGRATE
+            - name: SPRING_PROFILES_ACTIVE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SPRING_PROFILES_ACTIVE
+            - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+            - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+            - name: MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED
+            - name: MANAGEMENT_PROMETHEUS_METRICS_EXPORT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: MANAGEMENT_PROMETHEUS_METRICS_EXPORT_ENABLED
+            - name: LOGGING_LEVEL_ROOT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOGGING_LEVEL_ROOT
+            - name: LOGGING_STRUCTURED_FORMAT_CONSOLE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: LOGGING_STRUCTURED_FORMAT_CONSOLE
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SPRING_DATASOURCE_URL
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SPRING_DATASOURCE_USERNAME
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SPRING_DATASOURCE_PASSWORD
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: NEW_RELIC_LICENSE_KEY
+            - name: NEW_RELIC_APP_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: NEW_RELIC_APP_NAME
+            - name: AUTH_LAMBDA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AUTH_LAMBDA_URL
+                  optional: true
+            - name: SQS_URL_COMMANDS_VIDEO_UPLOAD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SQS_URL_COMMANDS_VIDEO_UPLOAD
+                  optional: true
+            - name: SQS_URL_SO_REPLIES
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SQS_URL_SO_REPLIES
+                  optional: true
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AWS_SESSION_TOKEN
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AWS_REGION
+            - name: AWS_SQS_ENABLED
+              value: "true"
+
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8083
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+      imagePullSecrets:
+        - name: dockerhub-secret
+      terminationGracePeriodSeconds: 60
+
