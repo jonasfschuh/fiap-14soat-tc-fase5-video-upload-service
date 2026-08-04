@@ -20,24 +20,6 @@ jobs:
       checks: write
       pull-requests: write
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-
-        env:
-          POSTGRES_DB: video_upload_db_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-        ports:
-          - 5432:5432
-
     steps:
 
       - name: Checkout código
@@ -60,7 +42,6 @@ jobs:
         run: ./mvnw -B -ntp verify
         continue-on-error: true
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/video_upload_db_test
           SPRING_PROFILES_ACTIVE: test
 
       - name: Listar arquivos de teste
