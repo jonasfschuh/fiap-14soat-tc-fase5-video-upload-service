@@ -2,7 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: video-upload-api-hpa
-  namespace: raceforce-dev
+  namespace: fiapx
   labels:
     app: video-upload-api
     environment: development

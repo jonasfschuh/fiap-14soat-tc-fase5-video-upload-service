@@ -15,23 +15,23 @@ import org.springframework.util.StringUtils;
 @Configuration
 public class SwaggerConfiguration {
 
-    @Value("${auth.lambda.url:}")
-    private String authLambdaUrl = "";
+    @Value("${auth.service.url:}")
+    private String authServiceUrl = "";
+
+    /**
+     * Explicit server URL shown in Swagger UI (e.g. http://localhost/upload for K8s ingress).
+     * Defaults to "/" (relative) so Swagger calls go to the same host/port it was opened from.
+     */
+    @Value("${swagger.server.url:/}")
+    private String swaggerServerUrl;
 
     @Bean
     public OpenAPI customOpenAPI() {
-        java.util.List<Server> servers;
-        if (StringUtils.hasText(authLambdaUrl)) {
-            servers = java.util.List.of(
-                    new Server().url(authLambdaUrl + "/video-upload").description("AWS API Gateway (producao)")
-            );
-        } else {
-            servers = java.util.List.of(
-                    new Server().url("/").description("Local — http://localhost:8083")
-            );
-        }
+        String serverUrl = StringUtils.hasText(swaggerServerUrl) ? swaggerServerUrl : "/";
         return new OpenAPI()
-                .servers(servers)
+                .servers(java.util.List.of(
+                        new Server().url(serverUrl).description("API Server")
+                ))
                 .components(new Components()
                         .addSecuritySchemes("bearer-jwt", new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
@@ -59,12 +59,12 @@ public class SwaggerConfiguration {
     @Bean
     public OpenApiCustomizer authLoginServerOverride() {
         return openApi -> {
-            if (!StringUtils.hasText(authLambdaUrl)) return;
+            if (!StringUtils.hasText(authServiceUrl)) return;
             if (openApi.getPaths() == null) return;
             var authPath = openApi.getPaths().get("/auth/login");
             if (authPath != null) {
                 authPath.servers(java.util.List.of(
-                        new Server().url(authLambdaUrl).description("Auth Lambda — API Gateway")
+                        new Server().url(authServiceUrl).description("Auth Service")
                 ));
             }
         };

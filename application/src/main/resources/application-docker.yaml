@@ -1,11 +1,9 @@
 spring:
   datasource:
     url: jdbc:postgresql://postgres-video-upload:5432/video_upload_db
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
 
-aws:
-  sqs:
-    enabled: true
-    endpoint: http://localstack:4566
-    queue:
-      so-commands-video-upload: http://localstack:4566/000000000000/so-commands-video-upload
-      so-replies: http://localstack:4566/000000000000/so-replies
+auth:
+  service:
+    url: ${AUTH_SERVICE_URL:http://auth-api:8090}

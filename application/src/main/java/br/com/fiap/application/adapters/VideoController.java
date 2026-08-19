@@ -55,9 +55,10 @@ public class VideoController {
     }
 
     @GetMapping
-    @Operation(summary = "List user videos", description = "Returns all videos uploaded by the authenticated user.")
+    @Operation(summary = "List videos",
+               description = "Returns videos uploaded by the user. If X-User-Id header is provided, filters by that user; otherwise returns all videos.")
     public ResponseEntity<List<VideoStatusResponse>> listByUser(
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
 
         List<VideoStatusResponse> videos = findVideosByUser.execute(userId)
                 .stream()

@@ -20,9 +20,9 @@ class SwaggerConfigurationTest {
     }
 
     @Test
-    @DisplayName("customOpenAPI without authLambdaUrl returns local servers")
+    @DisplayName("customOpenAPI without authServiceUrl returns local servers")
     void customOpenAPI_withoutAuthUrl_returnsLocalServers() {
-        // authLambdaUrl is empty string by default
+        // authServiceUrl is empty string by default
         OpenAPI openApi = config.customOpenAPI();
 
         assertThat(openApi).isNotNull();
@@ -32,15 +32,16 @@ class SwaggerConfigurationTest {
     }
 
     @Test
-    @DisplayName("customOpenAPI with authLambdaUrl returns AWS server")
+    @DisplayName("customOpenAPI with authServiceUrl still uses swaggerServerUrl (not authServiceUrl)")
     void customOpenAPI_withAuthUrl_returnsAwsServer() {
-        ReflectionTestUtils.setField(config, "authLambdaUrl", "https://api.aws.example.com");
+        ReflectionTestUtils.setField(config, "authServiceUrl", "https://auth.example.com");
+        ReflectionTestUtils.setField(config, "swaggerServerUrl", "https://api.example.com/video-upload");
 
         OpenAPI openApi = config.customOpenAPI();
 
         assertThat(openApi).isNotNull();
         assertThat(openApi.getServers()).hasSize(1);
-        assertThat(openApi.getServers().get(0).getUrl()).contains("api.aws.example.com");
+        assertThat(openApi.getServers().get(0).getUrl()).contains("api.example.com");
     }
 
     @Test
@@ -53,7 +54,7 @@ class SwaggerConfigurationTest {
     }
 
     @Test
-    @DisplayName("authLoginServerOverride customizer does not throw when authLambdaUrl is empty")
+    @DisplayName("authLoginServerOverride customizer does not throw when authServiceUrl is empty")
     void authLoginServerOverride_withoutUrl_doesNotThrow() {
         var customizer = config.authLoginServerOverride();
 
@@ -64,7 +65,7 @@ class SwaggerConfigurationTest {
     @Test
     @DisplayName("authLoginServerOverride customizer handles null paths gracefully")
     void authLoginServerOverride_withNullPaths_doesNotThrow() {
-        ReflectionTestUtils.setField(config, "authLambdaUrl", "https://lambda.example.com");
+        ReflectionTestUtils.setField(config, "authServiceUrl", "https://auth.example.com");
         var customizer = config.authLoginServerOverride();
 
         OpenAPI openApi = new OpenAPI();
@@ -75,7 +76,7 @@ class SwaggerConfigurationTest {
     @Test
     @DisplayName("authLoginServerOverride customizer overrides auth login path server when URL is set")
     void authLoginServerOverride_withUrl_overridesLoginServer() {
-        ReflectionTestUtils.setField(config, "authLambdaUrl", "https://lambda.example.com");
+        ReflectionTestUtils.setField(config, "authServiceUrl", "https://auth.example.com");
         var customizer = config.authLoginServerOverride();
 
         OpenAPI openApi = config.customOpenAPI();

@@ -52,4 +52,15 @@ class VideoControllerTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
+
+    @Test
+    void shouldReturn200WithAllVideosWhenUserIdIsNull() {
+        VideoController controller = new VideoController(uploadVideo, findVideosByUser, findVideoById);
+        Video video = Video.create("user-1", "test.mp4", 1024L, "video/mp4");
+        when(findVideosByUser.execute(null)).thenReturn(List.of(video));
+
+        ResponseEntity<?> response = controller.listByUser(null);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+    }
 }

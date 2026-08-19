@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: video-upload-api
-  namespace: raceforce-dev
+  namespace: fiapx
   labels:
     app: video-upload-api
     environment: development
@@ -31,7 +31,7 @@ spec:
       containers:
         - name: video-upload-api
           image: video-upload-api:latest
-          imagePullPolicy: Always
+          imagePullPolicy: Never
           ports:
             - containerPort: 8083
               name: http
@@ -92,6 +92,36 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: SPRING_PROFILES_ACTIVE
+            - name: RABBITMQ_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_HOST
+            - name: RABBITMQ_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_PORT
+            - name: RABBITMQ_VHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_VHOST
+            - name: STORAGE_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: STORAGE_TYPE
+            - name: STORAGE_LOCAL_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: STORAGE_LOCAL_PATH
+            - name: AUTH_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AUTH_SERVICE_URL
             - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
               valueFrom:
                 configMapKeyRef:
@@ -147,46 +177,19 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: NEW_RELIC_APP_NAME
-            - name: AUTH_LAMBDA_URL
+            - name: RABBITMQ_USER
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
-                  key: AUTH_LAMBDA_URL
-                  optional: true
-            - name: SQS_URL_COMMANDS_VIDEO_UPLOAD
+                  name: rabbitmq-secret
+                  key: RABBITMQ_USER
+            - name: RABBITMQ_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
-                  key: SQS_URL_COMMANDS_VIDEO_UPLOAD
-                  optional: true
-            - name: SQS_URL_SO_REPLIES
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: SQS_URL_SO_REPLIES
-                  optional: true
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: AWS_ACCESS_KEY_ID
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: AWS_SECRET_ACCESS_KEY
-            - name: AWS_SESSION_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: AWS_SESSION_TOKEN
-            - name: AWS_REGION
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: AWS_REGION
-            - name: AWS_SQS_ENABLED
-              value: "true"
+                  name: rabbitmq-secret
+                  key: RABBITMQ_PASSWORD
+          volumeMounts:
+            - name: video-storage
+              mountPath: /app/videos
 
           resources:
             requests:
@@ -229,5 +232,8 @@ spec:
 
       imagePullSecrets:
         - name: dockerhub-secret
+      volumes:
+        - name: video-storage
+          persistentVolumeClaim:
+            claimName: fiapx-video-pvc
       terminationGracePeriodSeconds: 60
-

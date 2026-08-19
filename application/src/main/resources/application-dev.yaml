@@ -1,4 +1,4 @@
-# Perfil AWS/Dev — springdoc servido com prefixo /video-upload/
+# Perfil dev — springdoc servido com prefixo /video-upload/
 springdoc:
   api-docs:
     path: /video-upload/v3/api-docs
@@ -7,11 +7,6 @@ springdoc:
     config-url: /video-upload/v3/api-docs/swagger-config
     url: /video-upload/v3/api-docs
 
-# AWS SQS — sem endpoint override (usa endpoint real da AWS)
-# As URLs das filas vêm das env vars injetadas pelo deploy
-aws:
-  sqs:
-    endpoint: ""
-    queue:
-      so-commands-video-upload: ${SQS_URL_COMMANDS_VIDEO_UPLOAD:}
-      so-replies: ${SQS_URL_SO_REPLIES:}
+auth:
+  service:
+    url: ${AUTH_SERVICE_URL:}

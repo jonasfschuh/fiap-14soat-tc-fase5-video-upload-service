@@ -1,71 +1,5 @@
-version: '3.8'
 name: ms-video-upload
 services:
-
-  # ─── LocalStack (SHARED - All microservices use this) ───────────────────
-  localstack:
-    image: localstack/localstack:4.5
-    container_name: fiap-localstack
-    environment:
-      SERVICES: sqs,sns,s3
-      DEBUG: 1
-      DATA_DIR: /tmp/localstack/data
-      AWS_DEFAULT_REGION: us-east-1
-      EDGE_PORT: 4566
-    ports:
-      - "4566:4566"
-    volumes:
-      - localstack-data:/var/lib/localstack
-      - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
-    networks:
-      - app-network
-      - fiap-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # ─── StackPort (SHARED - AWS Resource Browser) ──────────────────────────
-  stackport:
-    image: davireis/stackport:0.3.4
-    container_name: fiap-stackport
-    ports:
-      - "8080:8080"
-    environment:
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_DEFAULT_REGION: us-east-1
-      AWS_ENDPOINT_URL: http://fiap-localstack:4566
-    depends_on:
-      localstack:
-        condition: service_healthy
-    networks:
-      - app-network
-      - fiap-network
-    restart: unless-stopped
-
-  # ─── PostgreSQL ──────────────────────────────────────────────────────────
-  postgres-video-upload:
-    image: postgres:16-alpine
-    container_name: postgres-video-upload
-    environment:
-      POSTGRES_DB: video_upload_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres-video-upload-data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
 
   # ─── Video Upload API ────────────────────────────────────────────────────
   video-upload-api:
@@ -75,7 +9,7 @@ services:
     container_name: video-upload-api
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-video-upload:5432/video_upload_db
+      SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:5433/video_upload_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SERVER_PORT: 8083
@@ -83,14 +17,12 @@ services:
       STORAGE_TYPE: local
       STORAGE_LOCAL_PATH: /app/uploads
       MAX_UPLOAD_SIZE: 500MB
-      # AWS / SQS + S3 — aponta para LocalStack compartilhado
-      AWS_SQS_ENABLED: "true"
-      AWS_ENDPOINT_OVERRIDE: http://fiap-localstack:4566
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      SQS_QUEUE_VIDEO_UPLOADED: video-uploaded
-      S3_BUCKET: fiap-video-uploads
+      RABBITMQ_HOST: host.docker.internal
+      RABBITMQ_PORT: 5672
+      RABBITMQ_VHOST: fiapx
+      RABBITMQ_USER: fiapx
+      RABBITMQ_PASSWORD: fiapx123
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-api:8090}
       # New Relic — license key injetada via .env
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY:-}
       NEW_RELIC_APP_NAME: video-upload-ms-local
@@ -98,11 +30,6 @@ services:
       - "8083:8083"
     volumes:
       - video-uploads:/app/uploads
-    depends_on:
-      postgres-video-upload:
-        condition: service_healthy
-      localstack:
-        condition: service_healthy
     networks:
       - app-network
       - fiap-network
@@ -113,13 +40,11 @@ services:
     image: adminer:latest
     container_name: adminer-video-upload
     environment:
-      ADMINER_DEFAULT_SERVER: postgres-video-upload
+      ADMINER_DEFAULT_SERVER: host.docker.internal:5433
     ports:
       - "8093:8080"
     networks:
       - app-network
-    depends_on:
-      - postgres-video-upload
     restart: unless-stopped
 
 networks:
@@ -130,6 +55,4 @@ networks:
     name: fiap-network
 
 volumes:
-  postgres-video-upload-data:
   video-uploads:
-  localstack-data:
