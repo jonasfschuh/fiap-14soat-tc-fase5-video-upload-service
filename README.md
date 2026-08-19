@@ -1,16 +1,11 @@
-﻿# fiap-14soat-tc-fase5-video-upload-service
+# fiap-14soat-tc-fase5-video-upload-service
 
 ![Java 21](https://img.shields.io/badge/Java_21-%23ED8B00.svg?style=for-the-badge&logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot_3.4.5-%236DB33F.svg?style=for-the-badge&logo=springboot&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Flyway](https://img.shields.io/badge/Flyway-%23CC0200.svg?style=for-the-badge&logo=flyway&logoColor=white)
 ![Swagger](https://img.shields.io/badge/OpenAPI_3-%2385EA2D.svg?style=for-the-badge&logo=swagger&logoColor=black)
-![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazonwebservices&logoColor=white)
-![Amazon S3](https://img.shields.io/badge/Amazon_S3-%23569A31.svg?style=for-the-badge&logo=amazons3&logoColor=white)
-![Amazon SQS](https://img.shields.io/badge/Amazon_SQS-%23FF9900.svg?style=for-the-badge&logo=amazonsqs&logoColor=white)
-![Amazon EKS](https://img.shields.io/badge/Amazon_EKS-%23FF9900.svg?style=for-the-badge&logo=amazoneks&logoColor=white)
-![Amazon RDS](https://img.shields.io/badge/Amazon_RDS-%23527FFF.svg?style=for-the-badge&logo=amazonrds&logoColor=white)
-![LocalStack](https://img.shields.io/badge/LocalStack-%23000000.svg?style=for-the-badge&logo=localstack&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-%23326CE5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)
 ![New Relic](https://img.shields.io/badge/New_Relic-%231CE783.svg?style=for-the-badge&logo=newrelic&logoColor=white)
@@ -53,22 +48,23 @@
 
 ## 📋 Descrição
 
-Este repositório contém o **microserviço Video Upload** da plataforma **FIAP X** — responsável por receber vídeos dos usuários autenticados, armazená-los no **Amazon S3** (ou localmente em ambiente de desenvolvimento) e publicar o evento `video-uploaded` na fila **Amazon SQS** para processamento assíncrono.
+Este repositório contém o **microserviço Video Upload** da plataforma **FIAP X** — responsável por receber vídeos dos usuários autenticados, armazená-los localmente (ou no S3 em produção) e publicar o evento `video.uploaded` no **RabbitMQ** (exchange `video.events`) para processamento assíncrono.
 
 A aplicação é desenvolvida em **Spring Boot 3 (Java 21)** com arquitetura hexagonal (Ports & Adapters / Clean Architecture).
 
-> ⚠️ **Repositório master do ambiente local:** este repositório é o ponto central para execução local de toda a stack. O `docker-compose.yml` inclui o **LocalStack** (emulação de S3 + SQS + SNS) e o **StackPort** (browser de recursos AWS locais), compartilhados com todos os demais microserviços via `fiap-network`. As filas SQS usadas por todos os serviços são criadas pelo script `scripts/init-localstack.sh` presente neste repositório.
+> ℹ️ **Infraestrutura compartilhada:** os recursos de infraestrutura (RabbitMQ, PostgreSQL) são provisionados pelo repositório [`fiap-14soat-tc-fase5-iac-terraform`](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform) via Kubernetes no Docker Desktop. Execute o `setup-cluster.sh` antes de iniciar este serviço.
 
 ### Principais funcionalidades
 
 | Funcionalidade | Descrição |
 |----------------|-----------|
 | **Upload de Vídeo** | Recebe arquivo de vídeo via `multipart/form-data` e retorna `202 Accepted` imediatamente |
-| **Armazenamento** | Salva o vídeo no S3 (AWS) ou em pasta local (dev), de acordo com o profile ativo |
-| **Publicação de Evento** | Publica mensagem `video-uploaded` no SQS para o `video-processing-service` consumir |
-| **Listagem de Status** | Retorna a lista de vídeos enviados pelo usuário autenticado |
+| **Armazenamento** | Salva o vídeo em pasta local (dev/K8s) ou S3 (AWS prod), de acordo com o profile ativo |
+| **Publicação de Evento** | Publica mensagem `video.uploaded` no RabbitMQ (exchange `video.events`) para o `video-processing-service` consumir |
+| **Listagem de Status** | Retorna vídeos; se `X-User-Id` for informado filtra por usuário, caso contrário retorna todos |
 | **Detalhe do Vídeo** | Retorna o status e metadados de um vídeo específico |
 | **Autenticação** | Proxy para o `auth-lambda` (login) — o `userId` é extraído do header `X-User-Id` injetado pelo API Gateway |
+| **Teste RabbitMQ** | `POST /api/test/rabbitmq` — publica evento de teste para validar conectividade com o broker |
 
 ### Estrutura de Módulos Maven
 
@@ -106,9 +102,9 @@ fiap-14soat-tc-fase5-video-upload-service/
 ┌─────────────────────────▼──────────────────────────────────┐
 │                  Infrastructure Layer                       │
 │   VideoRepositoryImpl (JPA)                                 │
-│   LocalFileStorageAdapter  │  S3StorageAdapter              │
-│   SqsVideoEventPublisherAdapter                             │
-│   HttpCorrelationLoggingFilter  │  SqsMessageLogger         │
+│   LocalFileStorageAdapter                                   │
+│   RabbitVideoEventPublisherAdapter                          │
+│   HttpCorrelationLoggingFilter                              │
 │   Flyway Migrations                                         │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -135,13 +131,13 @@ fiap-14soat-tc-fase5-video-upload-service/
     ├──► [VideoRepositoryPort] → salva com status PENDING
     │
     └──► [VideoEventPublisherPort]
-             └── SqsVideoEventPublisherAdapter → SQS: video-uploaded
+             └── RabbitVideoEventPublisherAdapter → exchange: video.events / routing-key: video.uploaded
     │
     ▼
 [202 Accepted] → { videoId, status: "PENDING" }
 ```
 
-### Evento publicado no SQS (`video-uploaded`)
+### Evento publicado no RabbitMQ (`video.events` / routing-key `video.uploaded`)
 
 ```json
 {
@@ -155,22 +151,24 @@ fiap-14soat-tc-fase5-video-upload-service/
 }
 ```
 
-### Infraestrutura Local (Docker Compose)
+### Infraestrutura Local (Docker Compose + K8s)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  fiap-network (bridge — compartilhada entre todos os serviços)   │
 │                                                                   │
-│  ┌─────────────────┐   ┌──────────────────┐   ┌──────────────┐ │
-│  │  video-upload   │   │   LocalStack      │   │  StackPort   │ │
-│  │  :8083          │   │   :4566           │   │  :8080       │ │
-│  │  (Spring Boot)  │   │   S3 + SQS + SNS  │   │  (AWS UI)    │ │
-│  └────────┬────────┘   └──────────────────┘   └──────────────┘ │
+│  ┌─────────────────┐   ┌──────────────────┐                     │
+│  │  video-upload   │   │   Adminer         │                     │
+│  │  :8083          │   │   :8093           │                     │
+│  │  (Spring Boot)  │   │   (UI PostgreSQL) │                     │
+│  └────────┬────────┘   └──────────────────┘                     │
 │           │                                                       │
-│  ┌────────▼────────┐   ┌──────────────────┐                     │
-│  │  PostgreSQL     │   │    Adminer        │                     │
-│  │  :5433          │   │    :8093          │                     │
-│  └─────────────────┘   └──────────────────┘                     │
+│  Recursos provisionados pelo iac-terraform (Kubernetes):         │
+│  ┌──────────────────┐   ┌──────────────────┐                     │
+│  │  PostgreSQL       │   │    RabbitMQ       │                     │
+│  │  localhost:5433   │   │  AMQP: 5672       │                     │
+│  │  (video_upload_db)│   │  UI:   15672      │                     │
+│  └──────────────────┘   └──────────────────┘                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -185,19 +183,16 @@ fiap-14soat-tc-fase5-video-upload-service/
 | **Java** | 21 | Linguagem da aplicação |
 | **Spring Boot** | 3.4.5 | Framework principal |
 | **Spring Data JPA** | 3.x | Persistência ORM |
+| **Spring AMQP** | 3.x | Integração com RabbitMQ |
 | **PostgreSQL** | 16 | Banco de dados relacional |
 | **Flyway** | 10.x | Migrações de schema versionadas |
-| **AWS SDK v2** | 2.x | S3 + SQS |
 | **Swagger / OpenAPI** | 3.x | Documentação interativa da API |
 
-### Mensageria & Storage
+### Mensageria
 
 | Tecnologia | Ambiente | Uso |
 |------------|----------|-----|
-| **Amazon SQS** | AWS | Fila `video-uploaded` (produção) |
-| **Amazon S3** | AWS | Armazenamento de vídeos (produção) |
-| **LocalStack** | Local/Docker | Emulação de SQS + S3 + SNS |
-| **LocalStack StackPort** | Local/Docker | Browser visual de recursos AWS locais |
+| **RabbitMQ** | Local/Docker/K8s | Exchange `video.events`, routing-key `video.uploaded` — provisionado pelo `iac-terraform` |
 
 ### Testes
 
@@ -255,13 +250,21 @@ As regras abaixo foram aplicadas em todos os repositórios da stack para atender
 
 - [Java 21+](https://adoptium.net/)
 - [Maven 3.9+](https://maven.apache.org/)
-- [Docker Desktop 4.25+](https://www.docker.com/products/docker-desktop/)
+- [Docker Desktop 4.25+](https://www.docker.com/products/docker-desktop/) com Kubernetes habilitado
+- **Infraestrutura provisionada** pelo [`fiap-14soat-tc-fase5-iac-terraform`](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform):
+
+```bash
+# No diretório do iac-terraform:
+bash scripts/setup-cluster.sh
+```
+
+Isso provisiona no Kubernetes: PostgreSQL (`localhost:5433`), RabbitMQ AMQP (`localhost:5672`) e UI (`localhost:15672`).
 
 ---
 
-### ⚙️ Configuração da rede Docker compartilhada
+### ⚙️ Rede Docker compartilhada
 
-Antes de subir qualquer serviço, crie a rede externa `fiap-network` (necessária uma única vez por máquina):
+Crie a rede externa `fiap-network` uma única vez por máquina:
 
 ```bash
 docker network create fiap-network
@@ -269,80 +272,63 @@ docker network create fiap-network
 
 ---
 
-### Opção A — Stack completa com Docker Compose *(recomendado)*
-
-Sobe a aplicação + PostgreSQL + LocalStack (S3/SQS/SNS) + StackPort + Adminer:
+### Opção A — Apenas Adminer (aplicação na IDE) *(recomendado)*
 
 ```bash
-# Build e start de todos os serviços
-docker compose up --build
+docker-start-local-dev.bat
+```
 
-# Apenas start (sem rebuild)
-docker compose up
+Ou diretamente:
 
-# Em background
-docker compose up -d
+```bash
+docker compose up -d adminer
+```
+
+| Serviço | URL | Descrição |
+|---------|-----|-----------|
+| **Adminer** | http://localhost:8093 | Interface web do PostgreSQL (`host.docker.internal:5433`) |
+| **RabbitMQ UI** | http://localhost:15672 | Gerenciamento do broker (user: fiapx / pass: fiapx123) |
+
+Execute a aplicação no IntelliJ com as variáveis do `.env.example`.
+
+---
+
+### Opção B — Container completo (API + Adminer)
+
+```bash
+docker compose up --build -d
 ```
 
 | Serviço | URL | Descrição |
 |---------|-----|-----------|
 | **API** | http://localhost:8083 | Video Upload Service |
 | **Swagger UI** | http://localhost:8083/swagger-ui.html | Documentação interativa |
-| **LocalStack** | http://localhost:4566 | Emulação de S3 + SQS + SNS |
-| **StackPort** | http://localhost:8080 | Browser visual de recursos AWS locais |
 | **Adminer** | http://localhost:8093 | Interface web do PostgreSQL |
 
 ```bash
-# Parar os containers
 docker compose down
-
-# Parar e remover volumes (apaga dados do banco e LocalStack)
-docker compose down -v
 ```
 
 ---
 
-### Opção B — Apenas infraestrutura local (aplicação rodando na IDE)
+### Recursos criados pelo iac-terraform
 
-```bash
-# Subir apenas PostgreSQL, LocalStack e Adminer
-docker compose up -d postgres-video-upload localstack adminer
-```
+| Recurso | Endereço local | Banco/VHost |
+|---------|---------------|-------------|
+| **PostgreSQL upload** | `localhost:5433` | `video_upload_db` |
+| **RabbitMQ AMQP** | `localhost:5672` | vhost `fiapx` |
+| **RabbitMQ UI** | http://localhost:15672 | user: `fiapx` / pass: `fiapx123` |
 
-Em seguida, execute a aplicação com o profile `local`:
-
-```bash
-./mvnw spring-boot:run -pl application \
-  -Dspring-boot.run.arguments="--spring.profiles.active=local"
-```
-
----
-
-### Recursos criados automaticamente pelo LocalStack
-
-O script `scripts/init-localstack.sh` é executado automaticamente na inicialização do container e cria:
-
-| Tipo | Nome | Consumido por |
-|------|------|--------------|
-| **S3 Bucket** | `fiap-video-uploads` | `video-upload-service`, `video-processing-service` |
-| **SQS Queue** | `video-uploaded` | `video-processing-service` |
-| **SQS Queue** | `video-uploaded-dlq` | Monitoramento |
-| **SQS Queue** | `video-events` | `video-status-service`, `notification-service` |
-| **SQS Queue** | `video-events-dlq` | Monitoramento |
-
-> ℹ️ Cada novo serviço adicionado à stack deve incluir suas filas neste script.
+> ℹ️ O RabbitMQ é **compartilhado** entre todos os microserviços da stack via o mesmo broker K8s.
 
 ---
 
 ### Build da Aplicação (sem Docker)
 
 ```bash
-# Compilar e empacotar
 mvn clean package -DskipTests
-
-# Executar (requer PostgreSQL e LocalStack rodando)
 java -jar application/target/video-upload-application-*.jar \
-  --spring.profiles.active=local
+  --spring.profiles.active=dev
 ```
 
 ---
@@ -362,10 +348,11 @@ java -jar application/target/video-upload-application-*.jar \
 |--------|------|------|-----------|
 | `POST` | `/auth/login` | ❌ | Proxy para auth-lambda (retorna JWT) |
 | `POST` | `/api/videos` | ✅ | Upload de vídeo (`multipart/form-data`, campo `video`) |
-| `GET` | `/api/videos` | ✅ | Lista vídeos do usuário autenticado |
+| `GET` | `/api/videos` | ⚪ | Lista vídeos; filtra por usuário se `X-User-Id` for fornecido, retorna todos se omitido |
 | `GET` | `/api/videos/{id}` | ✅ | Detalhe e status de um vídeo específico |
+| `POST` | `/api/test/rabbitmq` | ❌ | Publica evento de teste no RabbitMQ (dev only) |
 
-> ✅ = requer header `X-User-Id` (injetado pelo API Gateway após validação JWT)
+> ✅ = requer header `X-User-Id` · ⚪ = header opcional
 
 ### Exemplo — Upload de Vídeo
 
@@ -385,11 +372,17 @@ curl -X POST http://localhost:8083/api/videos \
 }
 ```
 
-### Exemplo — Listagem de Vídeos
+### Exemplo — Listagem de Vídeos (com filtro de usuário)
 
 ```bash
 curl http://localhost:8083/api/videos \
   -H "X-User-Id: user-123"
+```
+
+### Exemplo — Listagem de todos os vídeos (sem filtro)
+
+```bash
+curl http://localhost:8083/api/videos
 ```
 
 **Response 200 OK:**
@@ -406,7 +399,32 @@ curl http://localhost:8083/api/videos \
 ]
 ```
 
-### Formatos de vídeo aceitos
+### Exemplo — Teste de conectividade com RabbitMQ
+
+```bash
+curl -X POST "http://localhost:8083/api/test/rabbitmq?userId=user-123&filename=meu-video.mp4"
+```
+
+**Response 200 OK:**
+```json
+{
+  "status": "published",
+  "exchange": "video.events",
+  "routingKey": "video.uploaded",
+  "payload": {
+    "videoId": "550e8400-e29b-41d4-a716-446655440000",
+    "userId": "user-123",
+    "storageKey": "videos/user-123/550e8400-.../meu-video.mp4",
+    "originalFilename": "meu-video.mp4",
+    "fileSizeBytes": 1048576,
+    "mimeType": "video/mp4",
+    "timestamp": "2026-08-19T10:00:00Z",
+    "testMessage": true
+  }
+}
+```
+
+> ⚠️ Este endpoint é destinado exclusivamente ao desenvolvimento local. Não habilitar em produção.
 
 `mp4`, `avi`, `mov`, `mkv`, `wmv`, `webm` — tamanho máximo: **500 MB** (configurável via `MAX_UPLOAD_SIZE`)
 
@@ -477,6 +495,104 @@ start report-aggregate/target/site/jacoco-aggregate/index.html
 | 8 | [fiap-14soat-tc-fase5-observability](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-observability) | Prometheus + Grafana — dashboards e alertas |
 
 ---
+
+
+---
+
+## ⚙️ CI/CD — Configurando o Self-Hosted Runner
+
+O pipeline de deploy deste repositório utiliza um **GitHub Actions self-hosted runner** rodando na máquina local com acesso ao cluster Kubernetes (Docker Desktop).
+
+### Pré-requisitos do runner
+
+Certifique-se de que a máquina possui instalado:
+
+| Ferramenta | Versão mínima | Verificar |
+|-----------|---------------|-----------|
+| Docker Desktop (com K8s habilitado) | 4.x+ | `docker version` |
+| kubectl | 1.28+ | `kubectl version --client` |
+| Java 21 (JDK) | 21+ | `java -version` |
+| Maven Wrapper | — | `.\mvnw.cmd -version` |
+
+> Para o repositório IAC, também é necessário `terraform` (1.5+) e `helm` (3.x+).
+
+### Passo a passo — configurar o runner
+
+#### 1. Acesse as configurações do repositório no GitHub
+
+```
+GitHub → Repositório → Settings → Actions → Runners → New self-hosted runner
+```
+
+#### 2. Escolha o sistema operacional
+
+Selecione **Windows** e a arquitetura **x64**.
+
+#### 3. Baixe e configure o runner
+
+Execute os comandos exibidos pelo GitHub na sua máquina local (PowerShell como Administrador):
+
+```powershell
+# Criar pasta para o runner (ajuste o caminho se necessário)
+mkdir C:\actions-runner; cd C:\actions-runner
+
+# Baixar o runner (substitua a URL pela exibida no GitHub)
+Invoke-WebRequest -Uri https://github.com/actions/runner/releases/download/vX.X.X/actions-runner-win-x64-X.X.X.zip -OutFile actions-runner.zip
+
+# Extrair
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD\actions-runner.zip", "$PWD")
+
+# Configurar (use o token gerado pelo GitHub na tela de configuração)
+.\config.cmd --url https://github.com/<org>/<repo> --token <TOKEN-GERADO-PELO-GITHUB>
+```
+
+#### 4. Instalar como serviço Windows (recomendado)
+
+```powershell
+# Instalar e iniciar como serviço Windows (executa automaticamente no boot)
+.\svc.cmd install
+.\svc.cmd start
+
+# Verificar status
+.\svc.cmd status
+```
+
+#### 5. Verificar o runner no GitHub
+
+```
+GitHub → Repositório → Settings → Actions → Runners
+```
+
+O runner deve aparecer com status **Idle** (verde). A partir daí, qualquer push para `main` ou `develop` disparará o pipeline de deploy automaticamente.
+
+### Verificar o deploy após o pipeline
+
+```powershell
+# Listar pods no namespace fiapx
+kubectl get pods -n fiapx
+
+# Verificar logs do serviço
+kubectl logs -l app=<nome-do-app> -n fiapx --tail=50
+
+# Acessar via Swagger (após NGINX Ingress estar ativo)
+# http://localhost/<caminho>/swagger-ui.html
+```
+
+### Gerenciar o runner
+
+```powershell
+# Parar o serviço
+.\svc.cmd stop
+
+# Remover o serviço
+.\svc.cmd uninstall
+
+# Remover o runner do GitHub
+.\config.cmd remove --token <TOKEN>
+```
+
+> 💡 **Dica:** Para múltiplos repositórios, crie uma pasta separada para cada runner (ex: `C:\actions-runner\auth`, `C:\actions-runner\upload`) e repita o processo para cada um.
 
 <div align="center">
 
