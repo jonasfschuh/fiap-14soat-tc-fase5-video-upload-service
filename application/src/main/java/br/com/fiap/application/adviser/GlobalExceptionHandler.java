@@ -24,27 +24,31 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(VideoNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(VideoNotFoundException ex) {
+        log.warn("[EXCEPTION] VideoNotFoundException message={}", ex.getMessage());
         return error(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     @ExceptionHandler(VideoAccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(VideoAccessDeniedException ex) {
+        log.warn("[EXCEPTION] VideoAccessDeniedException message={}", ex.getMessage());
         return error(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     @ExceptionHandler(VideoValidationException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(VideoValidationException ex) {
+        log.warn("[EXCEPTION] VideoValidationException reason={}", ex.getMessage());
         return error(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
     }
 
     @ExceptionHandler(VideoStorageException.class)
     public ResponseEntity<Map<String, Object>> handleStorage(VideoStorageException ex) {
-        log.error("Storage error", ex);
+        log.error("[EXCEPTION] VideoStorageException error={}", ex.getMessage(), ex);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "Video storage failure: " + ex.getMessage());
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        log.warn("[EXCEPTION] MaxUploadSizeExceededException maxSizeAllowedMB=500");
         return error(HttpStatus.PAYLOAD_TOO_LARGE, "File exceeds maximum allowed size (500 MB)");
     }
 
@@ -53,12 +57,13 @@ public class GlobalExceptionHandler {
         String errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .collect(Collectors.joining(", "));
+        log.warn("[EXCEPTION] MethodArgumentNotValidException fields={}", errors);
         return error(HttpStatus.UNPROCESSABLE_ENTITY, errors);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {
-        log.error("Unexpected error", ex);
+        log.error("[EXCEPTION] UnexpectedError type={} error={}", ex.getClass().getSimpleName(), ex.getMessage(), ex);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
     }
 

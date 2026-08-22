@@ -20,7 +20,9 @@ public class RabbitMqConfiguration {
 
     public static final String EXCHANGE_VIDEO_EVENTS = "video.events";
     public static final String QUEUE_VIDEO_UPLOADED = "video-uploaded";
-    public static final String QUEUE_VIDEO_UPLOADED_DLQ = "video-uploaded-dlq";
+    public static final String QUEUE_VIDEO_UPLOADED_DLQ = "video.uploaded.dlq";
+    public static final String QUEUE_VIDEO_PROCESSED = "video-processed";
+    public static final String QUEUE_VIDEO_PROCESSED_DLQ = "video.processed.dlq";
 
     @Bean
     public TopicExchange videoEventsExchange() {
@@ -35,7 +37,7 @@ public class RabbitMqConfiguration {
     @Bean
     public Queue videoUploadedQueue() {
         return QueueBuilder.durable(QUEUE_VIDEO_UPLOADED)
-                .withArgument("x-dead-letter-exchange", "")
+                .withArgument("x-dead-letter-exchange", EXCHANGE_VIDEO_EVENTS)
                 .withArgument("x-dead-letter-routing-key", QUEUE_VIDEO_UPLOADED_DLQ)
                 .build();
     }
@@ -43,6 +45,34 @@ public class RabbitMqConfiguration {
     @Bean
     public Binding videoUploadedBinding(Queue videoUploadedQueue, TopicExchange videoEventsExchange) {
         return BindingBuilder.bind(videoUploadedQueue).to(videoEventsExchange).with("video.uploaded");
+    }
+
+    @Bean
+    public Binding videoUploadedDlqBinding(Queue videoUploadedDlq, TopicExchange videoEventsExchange) {
+        return BindingBuilder.bind(videoUploadedDlq).to(videoEventsExchange).with(QUEUE_VIDEO_UPLOADED_DLQ);
+    }
+
+    @Bean
+    public Queue videoProcessedDlq() {
+        return QueueBuilder.durable(QUEUE_VIDEO_PROCESSED_DLQ).build();
+    }
+
+    @Bean
+    public Queue videoProcessedQueue() {
+        return QueueBuilder.durable(QUEUE_VIDEO_PROCESSED)
+                .withArgument("x-dead-letter-exchange", EXCHANGE_VIDEO_EVENTS)
+                .withArgument("x-dead-letter-routing-key", QUEUE_VIDEO_PROCESSED_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Binding videoProcessedBinding(Queue videoProcessedQueue, TopicExchange videoEventsExchange) {
+        return BindingBuilder.bind(videoProcessedQueue).to(videoEventsExchange).with("video.processed");
+    }
+
+    @Bean
+    public Binding videoProcessedDlqBinding(Queue videoProcessedDlq, TopicExchange videoEventsExchange) {
+        return BindingBuilder.bind(videoProcessedDlq).to(videoEventsExchange).with(QUEUE_VIDEO_PROCESSED_DLQ);
     }
 
     @Bean

@@ -25,13 +25,22 @@ public class LocalFileStorageAdapter implements VideoStoragePort {
 
     @Override
     public String store(String key, InputStream stream, long sizeBytes, String mimeType) {
+        log.info("[STORAGE] Storing file key={} sizeBytes={} sizeMB={} mimeType={}",
+                key, sizeBytes, String.format("%.2f", sizeBytes / (1024.0 * 1024.0)), mimeType);
+        long startMs = System.currentTimeMillis();
         try {
             Path target = Paths.get(basePath, key);
             Files.createDirectories(target.getParent());
             Files.copy(stream, target, StandardCopyOption.REPLACE_EXISTING);
-            log.info("[LOCAL-STORAGE] Stored file: {}", target.toAbsolutePath());
+            long durationMs = System.currentTimeMillis() - startMs;
+            log.info("[STORAGE] File stored successfully key={} sizeBytes={} sizeMB={} durationMs={} path={}",
+                    key, sizeBytes, String.format("%.2f", sizeBytes / (1024.0 * 1024.0)),
+                    durationMs, target.toAbsolutePath());
             return key;
         } catch (IOException e) {
+            long durationMs = System.currentTimeMillis() - startMs;
+            log.error("[STORAGE] Failed to store file key={} sizeBytes={} durationMs={} error={}",
+                    key, sizeBytes, durationMs, e.getMessage(), e);
             throw new VideoStorageException("Failed to store file locally: " + key, e);
         }
     }

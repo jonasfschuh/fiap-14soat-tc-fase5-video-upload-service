@@ -1,6 +1,8 @@
 spring:
   application:
     name: video-upload-service
+  jackson:
+    time-zone: America/Sao_Paulo
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/video_upload_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}

@@ -80,4 +80,38 @@ class RabbitMqConfigurationTest {
 
         assertThat(port).isNotNull().isInstanceOf(RabbitVideoEventPublisherAdapter.class);
     }
+
+    @Test
+    @DisplayName("videoProcessedDlq creates durable queue")
+    void videoProcessedDlq_createsDurableQueue() {
+        Queue queue = config.videoProcessedDlq();
+
+        assertThat(queue.getName()).isEqualTo(RabbitMqConfiguration.QUEUE_VIDEO_PROCESSED_DLQ);
+        assertThat(queue.isDurable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("videoProcessedQueue creates durable queue with DLQ arguments")
+    void videoProcessedQueue_createsDurableQueueWithDlq() {
+        Queue queue = config.videoProcessedQueue();
+
+        assertThat(queue.getName()).isEqualTo(RabbitMqConfiguration.QUEUE_VIDEO_PROCESSED);
+        assertThat(queue.isDurable()).isTrue();
+        assertThat(queue.getArguments())
+                .containsEntry("x-dead-letter-exchange", RabbitMqConfiguration.EXCHANGE_VIDEO_EVENTS)
+                .containsEntry("x-dead-letter-routing-key", RabbitMqConfiguration.QUEUE_VIDEO_PROCESSED_DLQ);
+    }
+
+    @Test
+    @DisplayName("videoProcessedBinding binds queue to exchange with routing key")
+    void videoProcessedBinding_bindsQueueToExchange() {
+        Queue queue = config.videoProcessedQueue();
+        TopicExchange exchange = config.videoEventsExchange();
+
+        Binding binding = config.videoProcessedBinding(queue, exchange);
+
+        assertThat(binding.getExchange()).isEqualTo(RabbitMqConfiguration.EXCHANGE_VIDEO_EVENTS);
+        assertThat(binding.getDestination()).isEqualTo(RabbitMqConfiguration.QUEUE_VIDEO_PROCESSED);
+        assertThat(binding.getRoutingKey()).isEqualTo("video.processed");
+    }
 }

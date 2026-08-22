@@ -100,3 +100,4 @@ yarn-error.log*
 newrelic/newrelic.jar
 newrelic/logs/
 
+/uploads/
