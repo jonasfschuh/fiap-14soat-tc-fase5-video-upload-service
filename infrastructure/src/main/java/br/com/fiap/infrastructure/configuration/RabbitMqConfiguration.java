@@ -20,9 +20,11 @@ public class RabbitMqConfiguration {
 
     public static final String EXCHANGE_VIDEO_EVENTS = "video.events";
     public static final String QUEUE_VIDEO_UPLOADED = "video-uploaded";
-    public static final String QUEUE_VIDEO_UPLOADED_DLQ = "video.uploaded.dlq";
+    public static final String QUEUE_VIDEO_UPLOADED_DLQ = "video-uploaded-dlq";
+    public static final String ROUTING_VIDEO_UPLOADED_DLQ = "video.uploaded.dlq";
     public static final String QUEUE_VIDEO_PROCESSED = "video-processed";
-    public static final String QUEUE_VIDEO_PROCESSED_DLQ = "video.processed.dlq";
+    public static final String QUEUE_VIDEO_PROCESSED_DLQ = "video-processed-dlq";
+    public static final String ROUTING_VIDEO_PROCESSED_DLQ = "video.processed.dlq";
 
     @Bean
     public TopicExchange videoEventsExchange() {
@@ -38,7 +40,7 @@ public class RabbitMqConfiguration {
     public Queue videoUploadedQueue() {
         return QueueBuilder.durable(QUEUE_VIDEO_UPLOADED)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_VIDEO_EVENTS)
-                .withArgument("x-dead-letter-routing-key", QUEUE_VIDEO_UPLOADED_DLQ)
+                .withArgument("x-dead-letter-routing-key", ROUTING_VIDEO_UPLOADED_DLQ)
                 .build();
     }
 
@@ -49,7 +51,7 @@ public class RabbitMqConfiguration {
 
     @Bean
     public Binding videoUploadedDlqBinding(Queue videoUploadedDlq, TopicExchange videoEventsExchange) {
-        return BindingBuilder.bind(videoUploadedDlq).to(videoEventsExchange).with(QUEUE_VIDEO_UPLOADED_DLQ);
+        return BindingBuilder.bind(videoUploadedDlq).to(videoEventsExchange).with(ROUTING_VIDEO_UPLOADED_DLQ);
     }
 
     @Bean
@@ -61,7 +63,7 @@ public class RabbitMqConfiguration {
     public Queue videoProcessedQueue() {
         return QueueBuilder.durable(QUEUE_VIDEO_PROCESSED)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_VIDEO_EVENTS)
-                .withArgument("x-dead-letter-routing-key", QUEUE_VIDEO_PROCESSED_DLQ)
+                .withArgument("x-dead-letter-routing-key", ROUTING_VIDEO_PROCESSED_DLQ)
                 .build();
     }
 
@@ -72,7 +74,7 @@ public class RabbitMqConfiguration {
 
     @Bean
     public Binding videoProcessedDlqBinding(Queue videoProcessedDlq, TopicExchange videoEventsExchange) {
-        return BindingBuilder.bind(videoProcessedDlq).to(videoEventsExchange).with(QUEUE_VIDEO_PROCESSED_DLQ);
+        return BindingBuilder.bind(videoProcessedDlq).to(videoEventsExchange).with(ROUTING_VIDEO_PROCESSED_DLQ);
     }
 
     @Bean
@@ -81,7 +83,10 @@ public class RabbitMqConfiguration {
     }
 
     @Bean
-    public VideoEventPublisherPort videoEventPublisherPort(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper) {
-        return new RabbitVideoEventPublisherAdapter(rabbitTemplate, objectMapper);
+    public VideoEventPublisherPort videoEventPublisherPort(
+            RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper,
+            @org.springframework.beans.factory.annotation.Value("${app.storage.local.path:./uploads}") String storageBasePath) {
+        return new RabbitVideoEventPublisherAdapter(rabbitTemplate, objectMapper, storageBasePath);
     }
 }

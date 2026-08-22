@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
+import java.nio.file.Paths;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -24,10 +25,12 @@ public class RabbitVideoEventPublisherAdapter implements VideoEventPublisherPort
 
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
+    private final String storageBasePath;
 
-    public RabbitVideoEventPublisherAdapter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper) {
+    public RabbitVideoEventPublisherAdapter(RabbitTemplate rabbitTemplate, ObjectMapper objectMapper, String storageBasePath) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
+        this.storageBasePath = storageBasePath;
     }
 
     @Override
@@ -37,6 +40,7 @@ public class RabbitVideoEventPublisherAdapter implements VideoEventPublisherPort
             payload.put("videoId", video.getId().toString());
             payload.put("userId", video.getUserId());
             payload.put("storageKey", video.getStorageKey());
+            payload.put("storageAbsolutePath", Paths.get(storageBasePath, video.getStorageKey()).toAbsolutePath().toString());
             payload.put("originalFilename", video.getOriginalFilename());
             payload.put("fileSizeBytes", video.getFileSizeBytes());
             payload.put("mimeType", video.getMimeType());

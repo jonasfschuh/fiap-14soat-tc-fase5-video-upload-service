@@ -46,7 +46,7 @@ class RabbitMqConfigurationTest {
         assertThat(queue.isDurable()).isTrue();
         assertThat(queue.getArguments())
                 .containsEntry("x-dead-letter-exchange", RabbitMqConfiguration.EXCHANGE_VIDEO_EVENTS)
-                .containsEntry("x-dead-letter-routing-key", RabbitMqConfiguration.QUEUE_VIDEO_UPLOADED_DLQ);
+                .containsEntry("x-dead-letter-routing-key", RabbitMqConfiguration.ROUTING_VIDEO_UPLOADED_DLQ);
     }
 
     @Test
@@ -76,7 +76,7 @@ class RabbitMqConfigurationTest {
         RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
         ObjectMapper objectMapper = new ObjectMapper();
 
-        VideoEventPublisherPort port = config.videoEventPublisherPort(rabbitTemplate, objectMapper);
+        VideoEventPublisherPort port = config.videoEventPublisherPort(rabbitTemplate, objectMapper, "./uploads");
 
         assertThat(port).isNotNull().isInstanceOf(RabbitVideoEventPublisherAdapter.class);
     }
@@ -99,7 +99,7 @@ class RabbitMqConfigurationTest {
         assertThat(queue.isDurable()).isTrue();
         assertThat(queue.getArguments())
                 .containsEntry("x-dead-letter-exchange", RabbitMqConfiguration.EXCHANGE_VIDEO_EVENTS)
-                .containsEntry("x-dead-letter-routing-key", RabbitMqConfiguration.QUEUE_VIDEO_PROCESSED_DLQ);
+                .containsEntry("x-dead-letter-routing-key", RabbitMqConfiguration.ROUTING_VIDEO_PROCESSED_DLQ);
     }
 
     @Test

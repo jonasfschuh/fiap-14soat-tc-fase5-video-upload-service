@@ -26,7 +26,7 @@ class RabbitVideoEventPublisherAdapterTest {
 
     @BeforeEach
     void setUp() {
-        adapter = new RabbitVideoEventPublisherAdapter(rabbitTemplate, new ObjectMapper());
+        adapter = new RabbitVideoEventPublisherAdapter(rabbitTemplate, new ObjectMapper(), "./uploads");
     }
 
     @Test
