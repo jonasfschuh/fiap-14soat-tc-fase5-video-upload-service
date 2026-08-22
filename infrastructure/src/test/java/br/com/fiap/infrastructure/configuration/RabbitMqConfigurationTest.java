@@ -45,7 +45,7 @@ class RabbitMqConfigurationTest {
         assertThat(queue.getName()).isEqualTo(RabbitMqConfiguration.QUEUE_VIDEO_UPLOADED);
         assertThat(queue.isDurable()).isTrue();
         assertThat(queue.getArguments())
-                .containsEntry("x-dead-letter-exchange", "")
+                .containsEntry("x-dead-letter-exchange", RabbitMqConfiguration.EXCHANGE_VIDEO_EVENTS)
                 .containsEntry("x-dead-letter-routing-key", RabbitMqConfiguration.QUEUE_VIDEO_UPLOADED_DLQ);
     }
 
