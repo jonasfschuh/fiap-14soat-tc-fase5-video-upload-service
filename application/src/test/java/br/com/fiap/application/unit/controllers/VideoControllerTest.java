@@ -54,13 +54,15 @@ class VideoControllerTest {
     }
 
     @Test
-    void shouldReturn200WithAllVideosWhenUserIdIsNull() {
+    void shouldReturn200OnGetById() {
         VideoController controller = new VideoController(uploadVideo, findVideosByUser, findVideoById);
         Video video = Video.create("user-1", "test.mp4", 1024L, "video/mp4");
-        when(findVideosByUser.execute(null)).thenReturn(List.of(video));
+        UUID id = video.getId();
+        when(findVideoById.execute(id, "user-1")).thenReturn(video);
 
-        ResponseEntity<?> response = controller.listByUser(null);
+        ResponseEntity<?> response = controller.getById("user-1", id);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
     }
 }
+
