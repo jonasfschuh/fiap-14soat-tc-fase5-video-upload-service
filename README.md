@@ -63,7 +63,7 @@ A aplicação é desenvolvida em **Spring Boot 3 (Java 21)** com arquitetura hex
 | **Publicação de Evento** | Publica mensagem `video.uploaded` no RabbitMQ (exchange `video.events`) para o `video-processing-service` consumir |
 | **Listagem de Status** | Retorna vídeos; se `X-User-Id` for informado filtra por usuário, caso contrário retorna todos |
 | **Detalhe do Vídeo** | Retorna o status e metadados de um vídeo específico |
-| **Autenticação** | Proxy para o `auth-lambda` (login) — o `userId` é extraído do header `X-User-Id` injetado pelo API Gateway |
+| **Autenticação** | Proxy para o `auth` (login) — o `userId` é extraído do header `X-User-Id` injetado pelo API Gateway |
 | **Teste RabbitMQ** | `POST /api/test/rabbitmq` — publica evento de teste para validar conectividade com o broker |
 
 ### Estrutura de Módulos Maven
@@ -116,7 +116,7 @@ fiap-14soat-tc-fase5-video-upload-service/
     │  POST /api/videos (multipart/form-data)
     │  Header: Authorization: Bearer <JWT>
     ▼
-[API Gateway] ──── [auth-lambda] ← valida JWT, injeta X-User-Id
+[API Gateway] ──── [auth] ← valida JWT, injeta X-User-Id
     │
     ▼
 [VideoController]
@@ -346,7 +346,7 @@ java -jar application/target/video-upload-application-*.jar \
 
 | Método | Path | Auth | Descrição |
 |--------|------|------|-----------|
-| `POST` | `/auth/login` | ❌ | Proxy para auth-lambda (retorna JWT) |
+| `POST` | `/auth/login` | ❌ | Proxy para auth (retorna JWT) |
 | `POST` | `/api/videos` | ✅ | Upload de vídeo (`multipart/form-data`, campo `video`) |
 | `GET` | `/api/videos` | ⚪ | Lista vídeos; filtra por usuário se `X-User-Id` for fornecido, retorna todos se omitido |
 | `GET` | `/api/videos/{id}` | ✅ | Detalhe e status de um vídeo específico |
@@ -485,17 +485,14 @@ start report-aggregate/target/site/jacoco-aggregate/index.html
 
 | Ordem | Repositório | Descrição |
 |-------|-------------|-----------|
-| 1 | [fiap-14soat-tc-fase5-iac-terraform](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform) | VPC, ECS/EKS, S3, SQS, RDS, Cognito — infraestrutura AWS |
-| 2 | [fiap-14soat-tc-fase5-auth-lambda](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth-lambda) | Lambda Authorizer + Cognito + API Gateway |
-| 3 | [fiap-14soat-tc-fase5-video-upload-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-upload-service) | **Este repositório** — Upload + SQS publisher |
+| 1 | [fiap-14soat-tc-fase5-iac-terraform](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-iac-terraform) | Banco de dados, RabbitMQ — infraestrutura AWS |
+| 2 | [fiap-14soat-tc-fase5-auth](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-auth) | Login Authorizer            |
+| 3 | [fiap-14soat-tc-fase5-video-upload-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-upload-service) | Upload + RabbitMQ publisher |
 | 4 | [fiap-14soat-tc-fase5-video-processing-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-processing-service) | Processa vídeo, extrai frames, gera ZIP |
 | 5 | [fiap-14soat-tc-fase5-video-status-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-status-service) | Status e metadados dos vídeos por usuário |
-| 6 | [fiap-14soat-tc-fase5-video-download-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-download-service) | Download do ZIP via presigned URL S3 |
+| 6 | [fiap-14soat-tc-fase5-video-download-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-video-download-service) | Download do ZIP via presigned URL |
 | 7 | [fiap-14soat-tc-fase5-notification-service](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-notification-service) | Notificação por e-mail em caso de erro/conclusão |
 | 8 | [fiap-14soat-tc-fase5-observability](https://github.com/jonasfschuh/fiap-14soat-tc-fase5-observability) | Prometheus + Grafana — dashboards e alertas |
-
----
-
 
 ---
 
