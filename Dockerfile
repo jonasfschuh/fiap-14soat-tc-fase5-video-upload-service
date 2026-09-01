@@ -3,7 +3,10 @@ WORKDIR /app
 COPY . .
 # 'sh mvnw' evita depender do shebang/bit executavel do mvnw, que pode ser
 # corrompido para CRLF ao ser dado checkout num runner Windows.
-RUN sh mvnw clean package -DskipTests
+# O sed remove qualquer \r residual (CRLF) do script antes de executa-lo,
+# ja que o .gitattributes (eol=lf) nem sempre e respeitado pelo checkout
+# em runners Windows, o que quebra o shebang/linhas do script no shell alpine.
+RUN sed -i 's/\r$//' mvnw && sh mvnw clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 
 # ── New Relic Java Agent ────────────────────────────────────────────────────
