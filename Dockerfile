@@ -1,8 +1,9 @@
 ﻿FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 COPY . .
-RUN chmod +x mvnw
-RUN ./mvnw clean package -DskipTests
+# 'sh mvnw' evita depender do shebang/bit executavel do mvnw, que pode ser
+# corrompido para CRLF ao ser dado checkout num runner Windows.
+RUN sh mvnw clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 
 # ── New Relic Java Agent ────────────────────────────────────────────────────

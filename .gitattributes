@@ -1,0 +1,9 @@
+# Garante LF em scripts shell independente do SO do runner/checkout.
+# Sem isso, o actions/checkout em runner Windows pode aplicar CRLF ao mvnw,
+# quebrando o shebang (#!/bin/sh\r) e causando "mvnw: not found" no Docker build.
+mvnw      text eol=lf
+*.sh      text eol=lf
+
+# Scripts Windows mantêm CRLF nativo.
+mvnw.cmd  text eol=crlf
+*.bat     text eol=crlf
