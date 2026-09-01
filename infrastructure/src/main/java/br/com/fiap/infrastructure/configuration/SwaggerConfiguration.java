@@ -15,9 +15,6 @@ import org.springframework.util.StringUtils;
 @Configuration
 public class SwaggerConfiguration {
 
-    @Value("${auth.service.url:}")
-    private String authServiceUrl = "";
-
     /**
      * Explicit server URL shown in Swagger UI (e.g. http://localhost/upload for K8s ingress).
      * Defaults to "/" (relative) so Swagger calls go to the same host/port it was opened from.
@@ -58,15 +55,9 @@ public class SwaggerConfiguration {
 
     @Bean
     public OpenApiCustomizer authLoginServerOverride() {
-        return openApi -> {
-            if (!StringUtils.hasText(authServiceUrl)) return;
-            if (openApi.getPaths() == null) return;
-            var authPath = openApi.getPaths().get("/auth/login");
-            if (authPath != null) {
-                authPath.servers(java.util.List.of(
-                        new Server().url(authServiceUrl).description("Auth Service")
-                ));
-            }
-        };
+        // Intentionally a no-op: /auth/login is proxied through this service (AuthProxyController),
+        // so Swagger must call it on the same origin. Overriding to authServiceUrl directly
+        // causes a cross-origin (CORS) error from the browser.
+        return openApi -> {};
     }
 }
