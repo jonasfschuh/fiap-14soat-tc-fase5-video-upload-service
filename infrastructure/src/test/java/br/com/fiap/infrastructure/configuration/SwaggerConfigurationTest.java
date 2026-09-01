@@ -32,9 +32,8 @@ class SwaggerConfigurationTest {
     }
 
     @Test
-    @DisplayName("customOpenAPI with authServiceUrl still uses swaggerServerUrl (not authServiceUrl)")
+    @DisplayName("customOpenAPI with swaggerServerUrl uses that server URL")
     void customOpenAPI_withAuthUrl_returnsAwsServer() {
-        ReflectionTestUtils.setField(config, "authServiceUrl", "https://auth.example.com");
         ReflectionTestUtils.setField(config, "swaggerServerUrl", "https://api.example.com/video-upload");
 
         OpenAPI openApi = config.customOpenAPI();
@@ -54,7 +53,7 @@ class SwaggerConfigurationTest {
     }
 
     @Test
-    @DisplayName("authLoginServerOverride customizer does not throw when authServiceUrl is empty")
+    @DisplayName("authLoginServerOverride customizer is a no-op and does not throw")
     void authLoginServerOverride_withoutUrl_doesNotThrow() {
         var customizer = config.authLoginServerOverride();
 
@@ -65,7 +64,6 @@ class SwaggerConfigurationTest {
     @Test
     @DisplayName("authLoginServerOverride customizer handles null paths gracefully")
     void authLoginServerOverride_withNullPaths_doesNotThrow() {
-        ReflectionTestUtils.setField(config, "authServiceUrl", "https://auth.example.com");
         var customizer = config.authLoginServerOverride();
 
         OpenAPI openApi = new OpenAPI();
@@ -74,9 +72,8 @@ class SwaggerConfigurationTest {
     }
 
     @Test
-    @DisplayName("authLoginServerOverride customizer overrides auth login path server when URL is set")
+    @DisplayName("authLoginServerOverride customizer does not alter auth login path server")
     void authLoginServerOverride_withUrl_overridesLoginServer() {
-        ReflectionTestUtils.setField(config, "authServiceUrl", "https://auth.example.com");
         var customizer = config.authLoginServerOverride();
 
         OpenAPI openApi = config.customOpenAPI();
