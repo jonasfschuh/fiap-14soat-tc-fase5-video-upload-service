@@ -122,6 +122,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: AUTH_SERVICE_URL
+            - name: SWAGGER_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: SWAGGER_SERVER_URL
             - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
               valueFrom:
                 configMapKeyRef:

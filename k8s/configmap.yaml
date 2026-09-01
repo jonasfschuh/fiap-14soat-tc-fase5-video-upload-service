@@ -39,3 +39,7 @@ data:
   STORAGE_TYPE: "local"
   STORAGE_LOCAL_PATH: "/app/videos/uploads"
   AUTH_SERVICE_URL: "http://auth-service.fiapx.svc.cluster.local:8090"
+  # Prefixo usado pelo Ingress (nginx) para rotear a este servico. O Swagger UI
+  # usa este valor para montar as URLs de "Try it out" (POST/GET) corretamente,
+  # evitando 404 ao chamar a API sem o prefixo /video-upload.
+  SWAGGER_SERVER_URL: "/video-upload"
