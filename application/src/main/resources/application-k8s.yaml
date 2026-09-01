@@ -6,6 +6,9 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
-    path: /swagger-ui/index.html
+    # Nao sobrescrever para /swagger-ui/index.html: esse e o mesmo path do
+    # recurso estatico real da UI, e o controller de redirecionamento do
+    # springdoc conflita com ele, causando 404. Mantem o default
+    # /swagger-ui.html (herdado de application.yml) como ponto de entrada.
     config-url: /video-upload/v3/api-docs/swagger-config
     url: /video-upload/v3/api-docs
