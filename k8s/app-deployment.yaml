@@ -155,28 +155,30 @@ spec:
             - name: SPRING_DATASOURCE_URL
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: postgres-upload-secret
                   key: SPRING_DATASOURCE_URL
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: postgres-upload-secret
                   key: SPRING_DATASOURCE_USERNAME
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: postgres-upload-secret
                   key: SPRING_DATASOURCE_PASSWORD
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: NEW_RELIC_LICENSE_KEY
+                  optional: true
             - name: NEW_RELIC_APP_NAME
               valueFrom:
                 secretKeyRef:
                   name: app-secrets
                   key: NEW_RELIC_APP_NAME
+                  optional: true
             - name: RABBITMQ_USER
               valueFrom:
                 secretKeyRef:

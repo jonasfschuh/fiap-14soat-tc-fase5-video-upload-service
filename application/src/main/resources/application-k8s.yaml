@@ -1,0 +1,11 @@
+# Perfil K8s — springdoc configurado para funcionar atras do ingress nginx.
+# O ingress reescreve /video-upload(/|$)(.*) -> /$2, entao o app recebe
+# requisicoes sem o prefixo /video-upload. O browser (Swagger UI) porem
+# precisa usar os paths completos para que o ingress roteia corretamente.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
+    config-url: /video-upload/v3/api-docs/swagger-config
+    url: /video-upload/v3/api-docs
