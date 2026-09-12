@@ -8,7 +8,7 @@ metadata:
     environment: development
     managed-by: kubectl
 spec:
-  replicas: 1
+  replicas: 3
   progressDeadlineSeconds: 600
   strategy:
     type: RollingUpdate
@@ -175,13 +175,13 @@ spec:
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: newrelic-secret
                   key: NEW_RELIC_LICENSE_KEY
                   optional: true
             - name: NEW_RELIC_APP_NAME
               valueFrom:
                 secretKeyRef:
-                  name: app-secrets
+                  name: newrelic-secret
                   key: NEW_RELIC_APP_NAME
                   optional: true
             - name: RABBITMQ_USER
@@ -200,11 +200,11 @@ spec:
 
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "100m"
+              memory: "768Mi"
+              cpu: "150m"
             limits:
-              memory: "1Gi"
-              cpu: "500m"
+              memory: "1536Mi"
+              cpu: "1000m"
 
           lifecycle:
             preStop:

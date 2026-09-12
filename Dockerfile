@@ -21,7 +21,13 @@ WORKDIR /app
 COPY --from=build /app/application/target/video-upload-application-1.0.0-exec.jar app.jar
 COPY newrelic/newrelic.yml /app/newrelic/newrelic.yml
 EXPOSE 8083
-ENTRYPOINT ["java", \
-  "-javaagent:/app/newrelic/newrelic.jar", \
-  "-Dnewrelic.config.file=/app/newrelic/newrelic.yml", \
-  "-jar", "app.jar"]
+# O agente New Relic só é anexado se NEW_RELIC_LICENSE_KEY estiver definida.
+# Sem a chave, o agente ainda carregaria suas classes e threads na JVM sem
+# nenhuma função útil, consumindo memória extra no cluster local (que já
+# roda perto do limite de memória do container).
+ENTRYPOINT ["sh", "-c", "\
+  if [ -n \"$NEW_RELIC_LICENSE_KEY\" ]; then \
+    exec java -javaagent:/app/newrelic/newrelic.jar -Dnewrelic.config.file=/app/newrelic/newrelic.yml -jar app.jar; \
+  else \
+    exec java -jar app.jar; \
+  fi"]

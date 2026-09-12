@@ -12,8 +12,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: video-upload-api
-  minReplicas: 1
-  maxReplicas: 1  # AWS Academy: nao escalar (evita rolling update loop em lab)
+  minReplicas: 3
+  maxReplicas: 6  # cluster k8s local
   metrics:
     - type: Resource
       resource:
